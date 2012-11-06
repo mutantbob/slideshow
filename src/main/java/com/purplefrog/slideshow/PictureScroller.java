@@ -1,4 +1,4 @@
-import com.purplefrog.slideshow.*;
+package com.purplefrog.slideshow;
 
 import javax.swing.*;
 import java.awt.*;
