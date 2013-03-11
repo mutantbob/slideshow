@@ -136,7 +136,11 @@ public class URLExtractor
     {
         List<URL> rval = new ArrayList<URL>();
 
-        for (File file : dir.listFiles()) {
+        File[] listing = dir.listFiles();
+        if (null == listing)
+            return rval;
+
+        for (File file : listing) {
 //            System.out.println("checking "+file);
             if (file.isDirectory()) {
 //                System.out.println("directory");
