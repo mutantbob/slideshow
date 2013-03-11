@@ -40,7 +40,7 @@ public class SizedImageCache
 
         if (null == rval) {
             debugMsg("cache miss");
-            rval =SlideShowPane.fitImageIn(observer, srcImg, maxWidth, maxHeight);
+            rval = ImageSet.fitImageIn(observer, srcImg, maxWidth, maxHeight);
             if (null != rval)
                 cache.put(srcImg, new WeakReference<Image>(rval));
         }

@@ -17,59 +17,6 @@ public class SlideShowPane
     private boolean blacklistEnabled=false;
     //////////////////////////////////////////////////////////////////////
 
-    protected class ImagePosition {
-        URL u;
-
-        Image	baseImg;
-
-        Image	img, bigImg;
-        int	x,y;
-
-
-        protected ImagePosition() {
-            baseImg = null;
-
-            img = null;
-            bigImg = null;
-            x = y = 0;
-        }
-
-        public synchronized void clearDisplayImages() {
-            img = bigImg = null;
-        }
-
-        public Image dispImg(boolean isBig) {
-            return isBig ? bigImg : img;
-        }
-
-        public synchronized void flush() {
-            if (baseImg != null) baseImg.flush();
-            if (img != null) img.flush();
-            if (bigImg != null) bigImg.flush();
-        }
-
-        public synchronized void setImage(URL u)
-        {
-            this.u = u;
-            this.baseImg = MyImageCache.getImage2(u);
-            this.img = null;
-            this.bigImg = null;
-        }
-
-        private synchronized void computeImages(int i, Dimension d)
-        {
-            if (img == null)
-                img = fitImageIn(baseImg, smallWidth, smallHeight);
-            if (bigImg == null)
-                bigImg = fitImageIn(baseImg, centerWidth, d.height);
-        }
-
-        public synchronized String toString()
-        {
-            return "base="+baseImg+" img="+img+" big="+bigImg;
-        }
-    }
-
     /**/
 
     //////////////////////////////////////////////////////////////////////
@@ -134,15 +81,6 @@ public class SlideShowPane
         {
             synchronized (SlideShowPane.this) {
 
-                int urlOff = -1;
-                for (int i=0; i< images.length; i++) {
-                    if (img == images[i].dispImg(isBig(i))) {
-                        urlOff = screenIdxToIdx(i);
-                        break;
-                    }
-                }
-
-                Graphics g = null;
                 if (0 != (infoflags & (ImageObserver.ABORT|
                     ImageObserver.ERROR))) {
                     return false;
@@ -150,35 +88,44 @@ public class SlideShowPane
                 if (0 != (infoflags & (ImageObserver.ALLBITS|
                     ImageObserver.FRAMEBITS
                     /*| ImageObserver.SOMEBITS*/))) {
-                    /*
-                    if (0 != (infoflags & (ImageObserver.ALLBITS))) {
-                    System.out.println("all pixels for "+urlOff);
-                    } else {
-                    System.out.println("pixels for "+urlOff+" "+width+"x"+height+"+"+x+"+"+y);
-                    }
-                    */
-                    if (g==null) g = getGraphics();
-                    int screenOff = urlOff-currImageIdx + beforeCols*otherRows;
-                    if (screenOff>=0 &
-                        screenOff<countOnScreen()) {
-                        ImagePosition curr = images[screenOff];
-                        /*		    g.drawImage(curr.img,
-                        curr.x+x, curr.y+y,curr.x+x+width-1, curr.y+y+height-1,
-                        x, y, x+width-1, y+height-1, null);
-                        */
-                        if (true) {
-                            repaint(1, curr.x, curr.y, img.getWidth(null), img.getHeight(null));
+
+                    int boxNum = images.indexForImage(img);
+
+                    if (false) {
+                        if (0 != (infoflags & (ImageObserver.ALLBITS))) {
+                            System.out.println(boxNum);
                         } else {
-                            g.drawImage(curr.dispImg(urlOff==currImageIdx),
-                                curr.x, curr.y, null);
+                            System.out.println("pixels for "+boxNum + " " + width + "x" + height + "+" + x + "+" + y);
                         }
                     }
+
+                    if (boxNum>=0) {
+                        repaintBox(boxNum);
+                    }
+
                     drawStatusLEDs();
                 }
             }
             return 0 == (infoflags&ALLBITS);
         }
 
+    }
+
+    /**
+     * schedule a repaint of the box specified.  Boxes are numbered from 0..(beforeCols*otherRows + 1 + afterCols*otherRows) .
+     * @param boxNum
+     */
+    public void repaintBox(int boxNum)
+    {
+        Point curr = positions[boxNum];
+
+                        /*		    g.drawImage(curr.img,
+                        curr.x+x, curr.y+y,curr.x+x+width-1, curr.y+y+height-1,
+                        x, y, x+width-1, y+height-1, null);
+                        */
+        boolean big = isBig(boxNum);
+
+        repaint(1, curr.x, curr.y, big ? centerWidth:smallWidth , big ? getHeight() : smallHeight);
     }
 
     protected class BackgroundImagePrefetcher
@@ -233,29 +180,29 @@ public class SlideShowPane
 
         protected synchronized void onepass() {
             int i;
-            ImagePosition curr;
+            ImageSet curr;
 
             drawStatusLEDs();
 
             final int n = countOnScreen();
 
             i=beforeCols*otherRows;
-            curr = images[i];
+            curr = images.getIP(i);
             if (!groovy(curr.bigImg)) { return; }
             //imgStatusLED(i, Color.green);
 
             i++;
-            curr = images[i];
+            curr = images.getIP(i);
             if (!groovy(curr.bigImg)) { return; }
             //imgStatusLED(i, Color.green);
 
             for (i=0; i<n; i++) {
-                curr = images[i];
+                curr = images.getIP(i);
                 if (!groovy(curr.img)) { return; }
                 //imgStatusLED(i, Color.yellow);
             }
-            for (i= 1; i<afterCols*otherRows; i++) {
-                curr = images[beforeCols*otherRows+1+i];
+            for (i= beforeCols*otherRows+1; i<n; i++) {
+                curr = images.getIP(i);
                 if (!groovy(curr.bigImg)) { return; }
                 //imgStatusLED(i, Color.green);
             }
@@ -278,7 +225,8 @@ public class SlideShowPane
 
     //////////////////////////////////////////////////////////////////////
 
-    ImagePosition[] images;
+    AlbumWindow images;
+    Point[] positions;
 
     int	beforeCols, otherRows;
     int	afterCols/*, afterRows*/;
@@ -287,9 +235,6 @@ public class SlideShowPane
     int	currImageIdx;
 
     List<URL> urls;
-
-    //BaseImageWatcher [] baseWatchers;
-    //DispImageWatcher [] dispWatchers;
 
     Thread bip_thread;
     BackgroundImagePrefetcher bip;
@@ -305,6 +250,9 @@ public class SlideShowPane
     int	pad = 4;
     int	smallWidth, smallHeight, centerWidth;
 
+    SizedImageCache smallImageCache;
+    SizedImageCache bigImageCache;
+
     //////////////////////////////////////////////////////////////////////
 
     public SlideShowPane(List<URL> urls,
@@ -318,13 +266,11 @@ public class SlideShowPane
         /*this.afterRows = afterRows;*/
         currImageIdx = 0;
 
-        {
-            final int n = countOnScreen();
-            images = new ImagePosition[ n ];
-            for (int i=0; i<n; i++) {
-                images[i] = new ImagePosition();
-            }
-        }
+        images = new AlbumWindow(countOnScreen());
+        positions = new Point[countOnScreen()];
+        for (int i=0; i<positions.length; i++)
+            positions[i] = new Point();
+
         setURLs(urls);
 
         {
@@ -398,41 +344,17 @@ public class SlideShowPane
     public synchronized void imageFailed(Image img)
     {
         System.out.println("failure "+img);
-        for (int i = 0; i < images.length; i++) {
-            //int urlIdx = screenIdxToIdx(i);
-            //if (!validUrlsOff(urlIdx))
-            //    continue;
-
-            ImagePosition iwp = images[i];
-            if (iwp.baseImg == img
-                || iwp.img == img
-                || iwp.bigImg == img) {
-                System.out.println("smackdown "+iwp.u);
-
-                if (i<beforeCols*otherRows) {
-                    if (i>0) System.arraycopy(images, 0, images, 1, i);
-                    images[0] = new ImagePosition();
-                } else {
-                    int last = countOnScreen()-1;
-                    if (i<last)
-                        System.arraycopy(images, i+1, images, i, last-i);
-                    images[last] = new ImagePosition();
-                }
-                urls.remove(iwp.u);
-
-                getImages();
-                computeImages();
-                computeImagePositions();
-                repaint(100);
-                return;
-            }
+        URL u = images.URLforImage(img);
+        if (u!=null) {
+            System.out.println("smackdown "+u);
+            urls.remove(u);
+            getImages();
+            computeImages();
+            computeImagePositions();
+            repaint(100);
         }
-        img.flush();
-    }
 
-    private int screenIdxToIdx(int i)
-    {
-        return i + currImageIdx -beforeCols*otherRows;
+        img.flush();
     }
 
     //////////////////////////////////////////////////////////////////////
@@ -450,17 +372,20 @@ public class SlideShowPane
 
         PrintStream pw = System.err;
         pw.println("getImages()");
+
+        URL[] imageURLs = new URL[beforeCols*otherRows + 1 + afterCols*otherRows];
+
         if (blacklistEnabled) {
             
             int pivot = beforeCols * otherRows;
 
-            putURLInImagePosition(pw, pivot, currImageIdx);
-            
+            maybeSetURL(imageURLs, pivot, currImageIdx);
+
             int j=1;
             int urlsOff = currImageIdx-j;
             while (j<=beforeCols*otherRows) {
                 if (urlsOff<0) {
-                    putURLInImagePosition(pw, pivot-j, urlsOff);
+                    imageURLs[pivot-j] = null;
                     j++;
                     continue;
                 }
@@ -468,10 +393,10 @@ public class SlideShowPane
                 if (blacklisted(getURL(urlsOff))) {
                     System.out.println("blacklisted");
                 } else {
-                    putURLInImagePosition(pw, pivot-j, urlsOff);
+                    maybeSetURL(imageURLs, pivot-j, urlsOff);
                     j++;
                 }
-                    urlsOff--;
+                urlsOff--;
             }
             
             j=1;
@@ -479,7 +404,7 @@ public class SlideShowPane
             
             while (j<=afterCols*otherRows) {
                 if (!validUrlsOff(urlsOff)) {
-                    putURLInImagePosition(pw, pivot+j, urlsOff);
+                    imageURLs[pivot+j] = null;
                     j++;
                     continue;
                 }
@@ -487,10 +412,10 @@ public class SlideShowPane
                 if (blacklisted(getURL(urlsOff))) {
                     System.out.println("blacklisted");
                 } else {
-                    putURLInImagePosition(pw, pivot+j, urlsOff);
+                    maybeSetURL(imageURLs, pivot+j, urlsOff);
                     j++;
                 }
-                    urlsOff++;
+                urlsOff++;
             }
                         
         } else {
@@ -498,9 +423,18 @@ public class SlideShowPane
                 int screenOff = j + beforeCols*otherRows;
                 final int urlsOff=currImageIdx+j;
                 pw.println(j+" urlsOff="+urlsOff);
-                putURLInImagePosition(pw, screenOff, urlsOff);
+                maybeSetURL(imageURLs, screenOff, urlsOff);
             }
         }
+
+        images.setURLs(imageURLs);
+    }
+
+    private void maybeSetURL(URL[] imageURLs, int screenOff, int urlsOff)
+    {
+        imageURLs[screenOff] =  validUrlsOff(urlsOff)
+            ? urls.get(urlsOff)
+            : null ;
     }
 
     private boolean blacklisted(URL url)
@@ -511,23 +445,6 @@ public class SlideShowPane
         } catch (URISyntaxException e) {
             e.printStackTrace();
             return false;
-        }
-    }
-
-    protected void putURLInImagePosition(PrintStream pw, int screenOff, int urlsOff)
-    {
-        if (!validUrlsOff(urlsOff)) {
-            pw.println("OOB");
-            images[screenOff] = new ImagePosition();
-        } else if (images[screenOff].baseImg == null) {
-
-            try {
-                final URL url = getURL(urlsOff);
-                pw.println("url["+urlsOff+"] = "+url);
-                images[screenOff].setImage(url);
-            } catch (Exception e) {
-                e.printStackTrace(System.err);
-            }
         }
     }
 
@@ -544,6 +461,9 @@ public class SlideShowPane
         centerWidth = widthMinusPad - smallWidth*beforeCols - smallWidth*afterCols;
         smallHeight = (d.height-pad*(otherRows-1)) / otherRows;
 
+        smallImageCache = new SizedImageCache(smallWidth, smallHeight);
+        bigImageCache = new SizedImageCache(centerWidth, d.height);
+
         //System.out.println("computeTableKerning:  w"+d.width+" "+f+" "+smallWidth+" "+smallHeight);
     }
 
@@ -553,41 +473,10 @@ public class SlideShowPane
     {
         Dimension d = getSize();
 
-        final int n = countOnScreen();
-        for (int i=0; i<n; i++) {
-            ImagePosition curr = images[i];
-            curr.computeImages(i, d);
-        }
-    }
+        ImageSet.Parameters params = new ImageSet.Parameters(smallWidth, smallHeight, centerWidth, d.height, biw);
 
-    public Image fitImageIn(Image baseImg, int w, int h)
-    {
-        if (null == baseImg)
-            return null; // blacklisting makes this a little weird.
+        images.computeImages(params);
 
-        if (baseImg == null)
-            throw new NullPointerException("oh fuck!");
-        ImageObserver observer = biw;
-        if (observer == null)
-            throw new NullPointerException("oh fuck!");
-
-        int	iw = baseImg.getWidth(observer);
-        int	ih = baseImg.getHeight(observer);
-        if (iw <1 ||
-            ih < 1) {
-            return null;
-        }
-
-        float r = 1;
-        if (w/(float)iw < r) r = w/(float)iw;
-        if (h/(float)ih < r) r = h/(float)ih;
-
-        int nw = Math.round(iw*r);
-        int nh = Math.round(ih*r);
-        if (nw<1) nw = 1;
-        if (nh<1) nh = 1;
-        //System.out.println("fitImageIn("+screenOff+","+w+","+h+") = "+nw+"x"+nh);
-        return baseImg.getScaledInstance(nw, nh, Image.SCALE_FAST);
     }
 
     //////////////////////////////////////////////////////////////////////
@@ -599,16 +488,16 @@ public class SlideShowPane
         for (int i = -beforeCols; i<0; i++) {
             for (int j=0; j<otherRows; j++) {
                 final int	screenOff = (i+beforeCols)*otherRows + j;
-                images[screenOff].x = (i+beforeCols)*(smallWidth+pad);
-                images[screenOff].y = j*(smallHeight+pad);
+                positions[screenOff].x = (i+beforeCols)*(smallWidth+pad);
+                positions[screenOff].y = j*(smallHeight+pad);
                 //System.out.println("images["+screenOff+"] @"+images[screenOff].x+","+images[screenOff].y);
             }
         }
 
         x = beforeCols*(smallWidth+pad);
 
-        images[beforeCols*otherRows].x = x;
-        images[beforeCols*otherRows].y = 0;
+        positions[beforeCols*otherRows].x = x;
+        positions[beforeCols*otherRows].y = 0;
 
         x += centerWidth+pad;
 
@@ -616,54 +505,28 @@ public class SlideShowPane
             for (int j=0; j<otherRows; j++) {
                 final int	screenOff = beforeCols*otherRows +1
                     +i*otherRows+ j;
-                images[screenOff].x = i*(smallWidth+pad) + x;
-                images[screenOff].y = j*(smallHeight+pad);
+                positions[screenOff].x = i*(smallWidth+pad) + x;
+                positions[screenOff].y = j*(smallHeight+pad);
             }
         }
     }
 
     //////////////////////////////////////////////////////////////////////
 
+    /**
+     * pick which of the images refered to by our URL array will be the big center image.
+     * @param newIdx
+     */
     public synchronized void setImageIdx(int newIdx) {
         if (!validUrlsOff(newIdx)) {
             throw new IllegalArgumentException("setImageIdx("+newIdx+")  ![0,"+urls.size()+")");
         }
 
         final int delta = newIdx - currImageIdx;
-        boolean echidna = true;
-        if (echidna) {
-            for (int i = 0; i < images.length; i++) {
-                images[i] = new ImagePosition();
-            }
-        } else {
-            final int n = countOnScreen();
-            int i;
-            if (delta<0) {
-                for (i=Math.max(delta, -n); i<0 && i<n; i++) {
-                    images[n+i].flush();
-                    System.out.println("flushing "+(n+i));
-                }
-                for (i=n-1+delta; i>=0; i--) {
-                    images[i-delta] = images[i];
-                }
-                for (i=0; i<-delta; i++) {
-                    images[i] = new ImagePosition();
-                }
-            } else if (delta>0) {
-                for (i=0; i<delta && i<n; i++) {
-                    images[i].flush();
-                }
-                for (i=0; i+delta<n; i++) {
-                    images[i] = images[i+delta];
-                }
-                for (; i<n; i++) {
-                    images[i] = new ImagePosition();
-                }
-            }
-        }
+
         currImageIdx = newIdx;
         System.out.println(getURL(newIdx).toString());
-        if (echidna || delta != 0) {
+        if (delta != 0) {
             getImages();
             computeImages();
             computeImagePositions();
@@ -675,31 +538,13 @@ public class SlideShowPane
 
     protected synchronized void resetBrokenImages()
     {
+        images.resetBrokenImages(null);
 
-        final int n = countOnScreen();
-        for (int i=0; i<n; i++) {
-            ImagePosition curr = images[i];
-            if (imageHasProblem(curr.baseImg) ) {
-                System.err.println(i+".baseImg damaged, resetting");
-                curr.baseImg.flush();
-                curr.baseImg = null;
-            }
-            if (imageHasProblem(curr.img) ) {
-                System.err.println(i+".img damaged, resetting");
-                curr.img.flush();
-                curr.img = null;
-            }
-            if (imageHasProblem(curr.bigImg) ) {
-                System.err.println(i+".bigImg damaged, resetting");
-                curr.bigImg.flush();
-                curr.bigImg = null;
-            }
-        }
         getImages();
         computeImages();
     }
 
-    private boolean imageHasProblem(Image img)
+    public boolean imageHasProblem(Image img)
     {
         return img!= null &&
                         0 != ( (ImageObserver.ABORT|ImageObserver.ERROR)
@@ -731,49 +576,43 @@ public class SlideShowPane
     //////////////////////////////////////////////////////////////////////
 
     protected final BaseImageWatcher biw = new BaseImageWatcher();
-    protected synchronized ImageObserver imageWatcherForBase(int i) {
-/*
-        ImageObserver o = baseWatchers[i];
-        if (o==null)
-            o = baseWatchers[i] = new BaseImageWatcher(i);
-        return o;
-*/
-        return biw;
-    }
 
     protected final DispImageWatcher diw = new DispImageWatcher();
-    protected synchronized ImageObserver imageWatcherForDisp(int i) {
-/*
-        ImageObserver o = dispWatchers[i];
-        if (o==null)
-            o = dispWatchers[i] = new DispImageWatcher(i);
-        return o;
-*/
-        return diw;
-    }
 
     //////////////////////////////////////////////////////////////////////
+/*
 
     public synchronized void paint(Graphics g) {
         paint_(g);
 
         super.paint(g);
     }
+*/
 
     @Override
     protected void paintComponent(Graphics g_)
     {
         Graphics g = g_.create();
+
+        g.setColor(getBackground());
+
         paint_(g);
     }
 
     public void paint_(Graphics g)
     {
         final int n = countOnScreen();
+
+        paintGutters(g);
+
         for (int i=0; i<n; i++) {
-            int urlsOff = i - beforeCols*otherRows + currImageIdx;
+            int urlsOff = i - beforeCols * otherRows + currImageIdx;
             //paintOneImage(g, i, imageWatcherForDisp(urlsOff));
-            ImagePosition curr = images[i];
+
+
+            Point curr =positions[i];
+
+            ImageSet qq=    images.getIP(i);
 
             boolean isBig = isBig(i) ;
 
@@ -782,14 +621,11 @@ public class SlideShowPane
 
             if (g.hitClip(curr.x, curr.y, w2, h2)) {
 
-                g.fillRect(curr.x, curr.y, w2, h2);
-
-                if (!validUrlsOff(urlsOff))
-                    continue;
-
-                if (curr.img != null) {
-                    drawImageInRectangle(g, urlsOff, curr.dispImg(isBig), curr.x, curr.y, w2, h2);
+                if (validUrlsOff(urlsOff) && qq.img != null) {
+                    drawImageInRectangle(g, qq.dispImg(isBig), curr.x, curr.y, w2, h2);
                     //System.out.println("drawing ["+i+"] at +"+curr.x+"+"+curr.y);
+                } else {
+                    g.fillRect(curr.x, curr.y, w2, h2);
                 }
             }
         }
@@ -798,6 +634,39 @@ public class SlideShowPane
 
         drawStatusLEDs();
         drawMag(g);
+    }
+
+    private void paintGutters(Graphics g)
+    {
+//        g.setColor(Color.RED);
+        int x2 = beforeCols*(smallWidth+pad) + centerWidth;
+        int w1 = beforeCols * (smallWidth + pad);
+        int w2 = afterCols * (smallWidth + pad);
+        for (int j=1; j<otherRows; j++) {
+            int y = (smallHeight + pad) * j - pad;
+            // left horizontal stripe gutter
+            g.fillRect(0, y, w1, pad);
+
+            // right horizontal stripe gutter
+            g.fillRect(x2, y, w2, pad);
+        }
+
+        int height = getHeight();
+
+        // left vertical stripe gutter
+        for (int j=0; j<beforeCols; j++) {
+            int x = j*(smallWidth+pad) + smallWidth;
+            g.fillRect(x, 0, pad, height);
+        }
+
+        // right vertical stripe gutter
+        for (int j=0; j<afterCols; j++) {
+            int x = beforeCols*(smallWidth+pad)
+                + centerWidth
+                + j * (smallWidth + pad);
+            g.fillRect(x, 0, pad, height);
+        }
+//        g.setColor(getBackground());
     }
 
     protected void drawTextReadouts(Graphics g)
@@ -821,9 +690,13 @@ public class SlideShowPane
         }
     }
 
-    public void drawImageInRectangle(Graphics g, int urlsOff, Image img, int x, int y, int w, int h)
+    public void drawImageInRectangle(Graphics g, Image img, int x, int y, int w, int h)
     {
-        g.drawImage(img, x, y, imageWatcherForDisp(urlsOff));
+        ImageObserver result;
+        synchronized (this) {
+            result = diw;
+        }
+        g.drawImage(img, x, y, result);
 
         int iw = img.getWidth(null);
         int ih = img.getHeight(null);
@@ -831,8 +704,11 @@ public class SlideShowPane
             iw=0;
         if (ih < 0)
             ih=0;
-        g.setColor(getBackground());
-        g.fillRect(x+iw, y, w - iw, ih);
+
+        // now fill in the parts of the box that aren't painted with image pixels
+        if (ih>0)
+            g.fillRect(x+iw, y, w - iw, ih);
+
         g.fillRect(x, y+ih, w, h-ih);
     }
 
@@ -844,14 +720,17 @@ public class SlideShowPane
 
     public Rectangle onScreenFor(Image img)
     {
-        for (ImagePosition ip : images) {
-            if (img == ip.img) {
-                return new Rectangle(ip.x, ip.y, img.getWidth(null), img.getHeight(null));
-            } else if (img == ip.bigImg) {
-                return new Rectangle(ip.x, ip.y, img.getWidth(null), img.getHeight(null));
+        for (int i=0; i<images.getCount(); i++) {
+            ImageSet is = images.getIP(i);
+
+            if (is.matchesImage(img)) {
+                Point pos = positions[i];
+                return new Rectangle(pos.x, pos.y, img.getWidth(null), img.getHeight(null));
             }
         }
+
         return null;
+
     }
 
     private boolean isBig(int screenIdx)
@@ -863,38 +742,59 @@ public class SlideShowPane
         if (magRadius<=0)
             return;
 
-        ImagePosition	bigun = images[beforeCols*otherRows];
+        int offOfBig = beforeCols * otherRows;
+        ImageSet	bigun = images.getIP(offOfBig);
+
+        Point pos = positions[offOfBig];
 
         if (bigun.baseImg==null)
             return;
 
-        if ( bigun.baseImg.getWidth(null)<=0 ||
-            bigun.baseImg.getHeight(null)<=0 ||
+        int baseIW = bigun.baseImg.getWidth(null);
+        int baseIH = bigun.baseImg.getHeight(null);
+        if ( baseIW <=0 ||
+            baseIH <=0 ||
             bigun.bigImg.getWidth(null)<=0 ||
             bigun.bigImg.getHeight(null)<=0)
             return;
 
         int x0,y0;
-        x0 = magX*bigun.baseImg.getWidth(null) / bigun.bigImg.getWidth(null);
-        y0 = magY*bigun.baseImg.getHeight(null) / bigun.bigImg.getHeight(null);
+        x0 = magX* baseIW / bigun.bigImg.getWidth(null);
+        y0 = magY* baseIH / bigun.bigImg.getHeight(null);
+
+        int d;
+        /* d = Math.round(2*magRadius/magDivisor);*/
+        d = 2*magRadius;
 
         x0 -= magRadius;
+        if (x0+d > baseIW)
+            x0 = baseIW-d;
         if (x0<0) x0=0;
 
         y0 -= magRadius;
+        if (y0+d>baseIH)
+            y0 = baseIH-d;
         if (y0<0) y0=0;
 
         int left, top;
-        left = magX+bigun.x - magRadius;
-        top = magY+bigun.y - magRadius;
+        left = magX+pos.x - magRadius;
+        top = magY+pos.y - magRadius;
+
+        int panelWidth = getWidth();
+        int panelHeight = getHeight();
+        if (left+d> panelWidth) {
+            left = panelWidth -d;
+        }
+        if (top+d> panelHeight) {
+            top = panelHeight -d;
+        }
+
         if (left<0) left=0;
         if (top<0) top=0;
 
         g.drawRect(left-1, top-1, 2*magRadius+1, 2*magRadius+1);
         // the magDivisor doesn't work
-        int d;
-        /* d = Math.round(2*magRadius/magDivisor);*/
-        d = 2*magRadius;
+
         //System.out.println("diameter "+d);
         g.drawImage(bigun.baseImg,
             left, top, left+d, top+d,
@@ -911,14 +811,14 @@ public class SlideShowPane
     }
 
     protected void drawStatusLEDs() {
-        ImagePosition curr;
+
         Graphics g = getGraphics();
         final int n = countOnScreen();
         int	i;
 
         //System.out.println("scanning");
         for (i=0; i<n; i++) {
-            curr = images[i];
+            ImageSet curr = images.getIP(i);
             if (curr.img == null ||
                 0 == (ALLBITS &checkImage(curr.img, -1,-1, null)) ) {
                 imgStatusLED(g, i, Color.red);
@@ -943,9 +843,7 @@ public class SlideShowPane
     {
         computeTableKerning();
 
-        final int n = countOnScreen();
-        for (int i=0; i<n; i++)
-            images[i].clearDisplayImages();
+        images.clearDisplayImages();
 
         computeImages();
         computeImagePositions();
@@ -1014,10 +912,6 @@ public class SlideShowPane
 
             if (0 != (mods & KeyEvent.SHIFT_MASK)) {
                 blacklistEnabled = !blacklistEnabled;
-
-                for (int i = 0, imagesLength = images.length; i < imagesLength; i++) {
-                    images[i] = new ImagePosition();
-                }
 
                 getImages();
                 computeImages();
@@ -1144,15 +1038,17 @@ public class SlideShowPane
 
     public void mouseDragged(MouseEvent e)
     {
-        ImagePosition	bigun = images[beforeCols*otherRows];
+        int offOfBig = beforeCols * otherRows;
+        ImageSet	bigun = images.getIP(offOfBig);
+        Point pos = positions[offOfBig];
         if (bigun.bigImg == null)
             return;
 
         // erase old mag window
         if (magRadius>0) {
             int left, top;
-            left = magX+bigun.x - magRadius;
-            top = magY+bigun.y - magRadius;
+            left = magX+pos.x - magRadius;
+            top = magY+pos.y - magRadius;
 
             Graphics g = getGraphics();
             g.setClip(left-1, top-1, 2*magRadius+2, 2*magRadius+2);
@@ -1163,8 +1059,8 @@ public class SlideShowPane
 
         // compute new parameters
 
-        int x = e.getX() - bigun.x;
-        int y = e.getY() - bigun.y;
+        int x = e.getX() - pos.x;
+        int y = e.getY() - pos.y;
 
         int w = bigun.bigImg.getWidth(null);
         if (x >= w )
