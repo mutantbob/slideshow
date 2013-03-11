@@ -25,7 +25,7 @@ public class MyImageCache
         if (ref!=null)
             rval = ref.get();
         if (rval==null) {
-            rval =toolkit.getImage(u );
+            rval =toolkit.createImage(u );
             cache.put(u, new SoftReference<Image>(rval));
         }
         return rval;
