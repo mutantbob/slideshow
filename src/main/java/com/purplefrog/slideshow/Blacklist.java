@@ -82,12 +82,14 @@ public class Blacklist
 
     private OneDir getBlacklistForDirectory(File directory)
     {
+        File canonical ;
         try {
-            directory = directory.getCanonicalFile();
+            canonical = directory.getCanonicalFile();
         } catch (IOException e) {
             log("unable to canonicalize "+directory, e);
+            canonical = directory;
         }
-        SoftReference<OneDir> rval_ = blacklists.get(directory);
+        SoftReference<OneDir> rval_ = blacklists.get(canonical);
 
         OneDir rval=null;
         if (rval_!=null) {
@@ -98,7 +100,7 @@ public class Blacklist
             File hashes = new File(directory, ".slideshow.blacklist");
 
             rval = new OneDir(hashes);
-            blacklists.put(directory, new SoftReference<OneDir>(rval));
+            blacklists.put(canonical, new SoftReference<OneDir>(rval));
         }
 
         return rval;
