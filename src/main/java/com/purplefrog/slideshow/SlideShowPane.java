@@ -10,7 +10,7 @@ import java.util.*;
 import java.util.List;
 
 public class SlideShowPane
-    extends JPanel
+    extends JComponent
     implements MouseListener, MouseMotionListener
 {
     protected Blacklist blacklist = new Blacklist();
@@ -370,8 +370,8 @@ public class SlideShowPane
 
     protected synchronized void getImages() {
 
-        PrintStream pw = System.err;
-        pw.println("getImages()");
+//        PrintStream pw = System.err;
+//        pw.println("getImages()");
 
         URL[] imageURLs = new URL[beforeCols*otherRows + 1 + afterCols*otherRows];
 
@@ -422,7 +422,7 @@ public class SlideShowPane
             for (int j = -beforeCols*otherRows ; j<= afterCols*otherRows; j++) {
                 int screenOff = j + beforeCols*otherRows;
                 final int urlsOff=currImageIdx+j;
-                pw.println(j+" urlsOff="+urlsOff);
+//                pw.println(j+" urlsOff="+urlsOff);
                 maybeSetURL(imageURLs, screenOff, urlsOff);
             }
         }
@@ -692,10 +692,13 @@ public class SlideShowPane
 
     public void drawImageInRectangle(Graphics g, Image img, int x, int y, int w, int h)
     {
+        boolean buggy=false;
         ImageObserver result;
         synchronized (this) {
             result = diw;
         }
+        if (!buggy)
+            g.fillRect(x,y, w, h);
         g.drawImage(img, x, y, result);
 
         int iw = img.getWidth(null);
@@ -705,11 +708,13 @@ public class SlideShowPane
         if (ih < 0)
             ih=0;
 
-        // now fill in the parts of the box that aren't painted with image pixels
-        if (ih>0)
-            g.fillRect(x+iw, y, w - iw, ih);
+        if (buggy) {
+            // now fill in the parts of the box that aren't painted with image pixels
+            if (ih>0)
+                g.fillRect(x+iw, y, w - iw, ih);
 
-        g.fillRect(x, y+ih, w, h-ih);
+            g.fillRect(x, y+ih, w, h-ih);
+        }
     }
 
     @Override
@@ -1000,7 +1005,8 @@ public class SlideShowPane
         if (delta == 0) {
             return;
         }
-        int newIdx = currImageIdx + delta;
+        int newIdx = //currImageIdx + delta;
+        urlIndexAfterBlacklisting(currImageIdx, delta);
         if (validUrlsOff(newIdx))
             setImageIdx(newIdx);
     }
@@ -1101,7 +1107,7 @@ public class SlideShowPane
     //////////////////////////////////////////////////////////////////////
 
 
-    public void addURLs(List<URL> x)
+    public void addURLs(Collection<URL> x)
     {
         System.out.println("adding "+x.size()+" URLs");
         urls.addAll(x);
