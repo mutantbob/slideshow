@@ -28,12 +28,39 @@ public class PictureScroller
     private double pixelsPerSecond=0;
     private int imageCursor = 0;
 
-    public PictureScroller(URL[] urls)
+    Geometry geom = true ? new Vertical(): new Horizontal();
+
+    public PictureScroller(URL... urls)
     {
-        images = new Gob[urls.length];
-        for (int i = 0; i < urls.length; i++) {
-            images[i] = new Gob(urls[i]);
+        this(Arrays.asList(urls));
+    }
+
+    public PictureScroller(Collection<URL> urls)
+    {
+
+        images = new Gob[urls.size()];
+        int i=0;
+        for ( Iterator<URL> iterator = urls.iterator(); iterator.hasNext(); i++) {
+            URL url = iterator.next();
+            images[i] = new Gob(url);
         }
+
+        addMouseMotionListener(new MouseMotionAdapter()
+        {
+            @Override
+            public void mouseMoved(MouseEvent mouseEvent)
+            {
+                if (!isFocusOwner()) {
+                    System.out.println("requestFocus()");
+                    requestFocus(); // XXX work around bugs in java, or fvwm, not sure which
+                }
+
+            }
+        });
+
+
+        addKeyListener(new ClicheKeyListener());
+
     }
 
     @Override
@@ -59,6 +86,52 @@ public class PictureScroller
     {
         super.paintComponent(g);
 
+        int i = paintForVertical(g);
+
+        {
+            // start loading the next image off screen
+            int j = (i + imageCursor) % images.length;
+            images[j].getSize();
+        }
+    }
+
+    private int paintForVertical(Graphics g)
+    {
+        int uncertain=0;
+        int z = -scrolled;
+        Dimension sz = getSize();
+        Rectangle r = g.getClipBounds();
+        int limit = geom.limit(sz, r);
+        int i;
+        for (i=0; i<images.length && uncertain<10 && z < limit; i++) {
+            int j = (i + imageCursor) % images.length;
+            Image img = images[j].getImage();
+
+            if (img==null) {
+                uncertain++;
+                continue;
+            }
+
+            Dimension isz = images[j].getSize();
+            if (null == isz) {
+                if ( ! images[j].isBad())
+                    uncertain++;
+                continue;
+            }
+
+            Dimension adjusted = geom.fitToScreen(isz, sz);
+
+            Point xy = geom.positionFor(z, sz, adjusted);
+
+            g.drawImage(img, xy.x, xy.y, adjusted.width, adjusted.height, this);
+
+            z += geom.advance(adjusted, padding); //+= adjusted.height + padding;
+        }
+        return i;
+    }
+
+    private int paintForHorizontal(Graphics g)
+    {
         int uncertain=0;
         int x = -scrolled;
         Dimension sz = getSize();
@@ -81,19 +154,14 @@ public class PictureScroller
                 continue;
             }
 
-            Dimension adjusted = fitToScreen(isz, sz);
+            Dimension adjusted = geom.fitToScreen(isz, sz);
 
             int y = (sz.height - adjusted.height)/2;
             g.drawImage(img, x, y, adjusted.width, adjusted.height, this);
 
             x += adjusted.width + padding;
         }
-
-        {
-            // start loading the next image off screen
-            int j = (i + imageCursor) % images.length;
-            images[j].getSize();
-        }
+        return i;
     }
 
     @Override
@@ -102,26 +170,18 @@ public class PictureScroller
         return super.imageUpdate(img, infoflags, x, y, w, h);
     }
 
-    private Dimension fitToScreen(Dimension imgSize, Dimension componentSize)
-    {
-        int h2 = componentSize.height;
-        int w2 = imgSize.width * componentSize.height/imgSize.height;
-
-        if (w2 > componentSize.width) {
-            w2 = componentSize.width;
-            h2 = imgSize.height * componentSize.width / imgSize.width;
-        }
-
-        return new Dimension(w2, h2);
-    }
-
-    private void startScrolling(double speed)
+    public void startScrolling(double speed)
     {
         this.pixelsPerSecond = speed;
         scrollTime = System.currentTimeMillis();
 
         Thread t = new ScrollThread();
         t.start();
+    }
+
+    public void pause()
+    {
+        paused=true;
     }
 
     protected synchronized void checkScrollProgress()
@@ -134,8 +194,8 @@ public class PictureScroller
             Dimension psz = images[prev].getSize();
             if (psz != null) {
                 imageCursor = prev;
-                Dimension adjusted = fitToScreen(psz, getSize());
-                scrolled += adjusted.width+padding;
+                Dimension adjusted = geom.fitToScreen(psz, getSize());
+                scrolled += geom.advance(adjusted,padding);
                 repaint();
             } else if (images[prev].isBad()) {
                 imageCursor = prev;
@@ -148,9 +208,9 @@ public class PictureScroller
         Dimension isz = images[imageCursor].getSize();
 
         if (isz != null) {
-            Dimension adjusted = fitToScreen(isz, getSize());
-            if (scrolled > adjusted.width) {
-                scrolled -= adjusted.width + padding;
+            Dimension adjusted = geom.fitToScreen(isz, getSize());
+            if (scrolled > geom.advance(adjusted,0) ) {
+                scrolled -= geom.advance(adjusted,padding);
 
                 images[imageCursor].soften();
 
@@ -186,7 +246,7 @@ public class PictureScroller
 //        System.out.println(message);
     }
 
-    public static URL[] parse(String[] argv)
+    public static List<URL> parse(String[] argv)
     {
         List<URL> rval = new ArrayList<URL>(argv.length);
 
@@ -209,11 +269,22 @@ public class PictureScroller
                         continue;
                     }
                 }
-                rval.add(u);
+
+                if (arg.endsWith(".spider")) {
+
+                    try {
+                        rval.addAll(HTMLHarvester.extractSpider(u));
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+
+                } else {
+                    rval.add(u);
+                }
             }
         }
 
-        return rval.toArray(new URL[rval.size()]);
+        return rval;
     }
 
     public static int previous(int n, int modulus)
@@ -293,16 +364,21 @@ public class PictureScroller
 
     public static void main(String[] argv)
     {
+        cliche(parse(argv));
+    }
+
+    public static void cliche(Collection<URL> urls)
+    {
         JFrame fr = new JFrame();
-        PictureScroller x = new PictureScroller(parse(argv));
-        x.scrolled = 50;
+        final PictureScroller x = new PictureScroller(urls);
+        x.scrolled = 0;
         fr.getContentPane().add(x);
         fr.pack();
+        fr.setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
         fr.setVisible(true);
 
-        x.addKeyListener(x.new ClicheKeyListener());
-
         x.startScrolling(40.0);
+        x.pause();
     }
 
     private class ScrollThread
@@ -332,6 +408,9 @@ public class PictureScroller
                     }
                     if (now >= nextTime) {
                         int dx = Math.max(1, (int) Math.floor( (now - scrollTime) * pixelsPerSecond/1000 ));
+                        if (scrollTime==0)
+                            dx=0; // bootstrap without insanity
+
                         debugPrint("scrolling by "+dx);
 
                         scrolled += dx;
@@ -392,7 +471,7 @@ public class PictureScroller
                 boolean shift = 0 != (e.getModifiers() & KeyEvent.SHIFT_MASK);
                 pixelsPerSecond *= shift ? 2.0: 1.1;
             } else if (KeyEvent.VK_RIGHT== e.getKeyCode()) {
-                scrolled += getSize().width;
+                scrolled += 0.9*geom.pgDown(getSize());
                 repaint();
             } else if (KeyEvent.VK_LEFT== e.getKeyCode()) {
 
@@ -404,7 +483,7 @@ public class PictureScroller
                             break;
                     }
                 } else {
-                    scrolled -= getSize().width;
+                    scrolled -= 0.9*geom.pgDown(getSize());
                     psNotifyAll();
                 }
                 repaint();
@@ -422,5 +501,93 @@ public class PictureScroller
             }
         }
 
+    }
+
+    public static interface Geometry
+    {
+
+        Dimension fitToScreen(Dimension isz, Dimension sz);
+
+        int limit(Dimension sz, Rectangle r);
+
+        Point positionFor(int z, Dimension sz, Dimension adjusted);
+
+        int advance(Dimension adjusted, int padding);
+
+        int pgDown(Dimension size);
+    }
+
+    public static class Vertical
+        implements Geometry
+    {
+        public Dimension fitToScreen(Dimension isz, Dimension sz)
+        {
+            int w2 = isz.width;
+            int h2 = isz.height;
+
+            if (w2 > sz.width) {
+                h2 = h2 * sz.width / w2;
+                w2 = sz.width;
+            }
+
+            return new Dimension(w2, h2);
+        }
+
+        public int limit(Dimension sz, Rectangle r)
+        {
+            return Math.min(sz.height, r.y + r.height);
+        }
+
+        public Point positionFor(int z, Dimension sz, Dimension adjusted)
+        {
+            return new Point((sz.width - adjusted.width)/2, z);
+        }
+
+        public int advance(Dimension adjusted, int padding)
+        {
+            return adjusted.height+padding;
+        }
+
+        public int pgDown(Dimension size)
+        {
+            return size.height;
+        }
+    }
+
+    public static class Horizontal
+        implements Geometry
+    {
+        public Dimension fitToScreen(Dimension isz, Dimension sz)
+        {
+            int h2 = sz.height;
+            int w2 = isz.width * sz.height/ isz.height;
+
+            if (w2 > sz.width) {
+                w2 = sz.width;
+                h2 = isz.height * sz.width / isz.width;
+            }
+
+            return new Dimension(w2, h2);
+        }
+
+        public int limit(Dimension sz, Rectangle r)
+        {
+            return Math.min(sz.width,  r.x+r.height);
+        }
+
+        public Point positionFor(int z, Dimension sz, Dimension adjusted)
+        {
+            return new Point( z, (sz.height - adjusted.height )/2);
+        }
+
+        public int advance(Dimension adjusted, int padding)
+        {
+            return adjusted.width +padding;
+        }
+
+        public int pgDown(Dimension size)
+        {
+            return size.width;
+        }
     }
 }
