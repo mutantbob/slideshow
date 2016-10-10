@@ -61,6 +61,11 @@
                             <name>pictureScroller</name>
                         </program>
 
+                        <program>
+                            <mainClass>com.purplefrog.slideshow.SlideShow</mainClass>
+                            <name>slideShow</name>
+                        </program>
+
 
                     </programs>
                 </configuration>
