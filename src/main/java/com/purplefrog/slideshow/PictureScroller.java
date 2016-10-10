@@ -581,7 +581,7 @@ public class PictureScroller
 
         public int limit(Dimension sz, Rectangle r)
         {
-            return Math.min(sz.width,  r.x+r.height);
+            return Math.min(sz.width,  r.x+r.width);
         }
 
         public Point positionFor(int z, Dimension sz, Dimension adjusted)
