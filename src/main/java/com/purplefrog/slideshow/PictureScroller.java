@@ -28,7 +28,8 @@ public class PictureScroller
     private double pixelsPerSecond=0;
     private int imageCursor = 0;
 
-    Geometry geom = true ? new Vertical(): new Horizontal();
+    private boolean vertical = false;
+    Geometry geom = vertical ? new Vertical(): new Horizontal();
 
     public PictureScroller(URL... urls)
     {
@@ -86,7 +87,7 @@ public class PictureScroller
     {
         super.paintComponent(g);
 
-        int i = paintForVertical(g);
+        int i = vertical ? paintForVertical(g) : paintForHorizontal(g);
 
         {
             // start loading the next image off screen
@@ -196,7 +197,7 @@ public class PictureScroller
                 imageCursor = prev;
                 Dimension adjusted = geom.fitToScreen(psz, getSize());
                 scrolled += geom.advance(adjusted,padding);
-                repaint();
+                repaint(1);
             } else if (images[prev].isBad()) {
                 imageCursor = prev;
             }
@@ -418,7 +419,7 @@ public class PictureScroller
 
                         checkScrollProgress();
 
-                        repaint();
+                        repaint(1);
 
                     } else {
 
@@ -487,6 +488,14 @@ public class PictureScroller
                     psNotifyAll();
                 }
                 repaint();
+            } else if (KeyEvent.VK_H == e.getKeyCode()) {
+                vertical = false;
+                geom = new Horizontal();
+                repaint(10);
+            } else if (KeyEvent.VK_V == e.getKeyCode()) {
+                vertical = true;
+                geom = new Vertical();
+                repaint(10);
             } else {
                 return;
             }
