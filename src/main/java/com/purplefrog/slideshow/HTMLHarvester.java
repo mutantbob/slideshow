@@ -183,4 +183,12 @@ public class HTMLHarvester
             Pattern.compile(imageCriteria),
             new URL(start));
     }
+
+    public static void spiderDocumentation(PrintStream out)
+    {
+        out.println("spider files are property files whose path ends with '.spider' and with 3 properties:\n" +
+            "htmlCriteria=regex\t// a regular expression to help us recognize relevant HTML URLs\n" +
+            "imageCriteria=regex\t// a regular expression to help us recognize relevant image URLs\n" +
+            "start=url\t\t// the URL for the first HTML file to start spidering");
+    }
 }

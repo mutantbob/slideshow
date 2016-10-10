@@ -254,7 +254,9 @@ public class PictureScroller
         for (int i = 0, argvLength = argv.length; i < argvLength; i++) {
             String arg = argv[i];
 
-            if (arg.equals("-find")) {
+            if (arg.equals("-help")) {
+                usage(System.out);
+            } else if (arg.equals("-find")) {
                 final List<URL> tmp = URLExtractor.recurseDirectory(new File(argv[++i]));
                 Collections.sort(tmp, new URLExtractor.WackyURLComparator());
                 rval.addAll(tmp);
@@ -286,6 +288,12 @@ public class PictureScroller
         }
 
         return rval;
+    }
+
+    private static void usage(PrintStream out)
+    {
+        out.println("java "+PictureScroller.class.getName()+" [ -find dirname ] [ -spider something.spider ] url*");
+        HTMLHarvester.spiderDocumentation(out);
     }
 
     public static int previous(int n, int modulus)
