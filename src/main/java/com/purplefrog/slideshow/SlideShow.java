@@ -181,6 +181,13 @@ public class SlideShow
                     List<URL> x = URLExtractor.recurseDirectory(new File(argv[i]));
                     Collections.sort(x, new URLExtractor.WackyURLComparator());
                     ss.addURLs(x);
+                } else if ("-spider".equals(argv[i])) {
+		    i++;
+		    try {
+			ss.addURLs(HTMLHarvester.extractSpider(new URL(argv[i])));
+		    } catch (IOException e) {
+			e.printStackTrace();
+		    }
                 } else if ("-imgmatch".equals(argv[i])) {
                     i++; // supporting code is unfinished
                     imgMatch = argv[i];
