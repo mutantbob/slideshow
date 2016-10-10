@@ -19,11 +19,11 @@ public class SlideShow
     extends Applet
 {
 
-    SlideShowPane pane;
+    SlideShowPane2 pane;
 
     public SlideShow()
     {
-        pane = new SlideShowPane();
+        pane = new SlideShowPane2();
         add(pane);
     }
 
@@ -107,7 +107,7 @@ public class SlideShow
 
         String imgMatch=null;
 
-            int i;
+        int i;
         {
 
             for (i=0; i<argv.length; i++) {
@@ -134,7 +134,7 @@ public class SlideShow
 
         JFrame f = new JFrame("SlideShow");
 
-        SlideShowPane ss = new SlideShowPane(new ArrayList(), 1,4);
+        SlideShowPane2 ss = new SlideShowPane2(new ArrayList(), 1,4);
         ss.setDoubleBuffered(true);
 
         f.getContentPane().add(ss);
