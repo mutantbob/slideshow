@@ -109,10 +109,12 @@ public class HTMLHarvester
 
                 if (tag.name .equalsIgnoreCase("img")) {
                     String src = tag.getAttributeValue("src");
-                    imgSrcs .add(src);
+                    if (null != src)
+                        imgSrcs .add(src);
                 } else if (tag.name.equals("a")) {
                     String href = tag.getAttributeValue("href");
-                    aHrefs.add(href);
+                    if (null != href)
+                        aHrefs.add(href);
                 }
 
             }
