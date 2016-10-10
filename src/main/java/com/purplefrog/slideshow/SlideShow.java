@@ -138,6 +138,7 @@ public class SlideShow
         ss.setDoubleBuffered(true);
 
         f.getContentPane().add(ss);
+        f.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         f.pack();
         if (geometry!=null) f.setSize(geometry);
         f.setVisible(true);
