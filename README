@@ -1,0 +1,11 @@
+This repository contains two java applications for displaying images.
+
+The SlideShow app shows a large central image flanked by thumbnails on
+the left and right that represent the images before and after it in
+the image sequence.  Scroll through the images by clicking on the
+image you want to put in the center, or use the spacebar/backspace, or
+left/right arrows, or PgUp/PgDn keys.
+
+The PictureScroller app displays images as a smoothly scrolling strip
+of images.  Use the spacebar to pause/unpause the scrolling.  'h' key
+activates horizontal scrolling.  'v' key activates vertical scrolling.
