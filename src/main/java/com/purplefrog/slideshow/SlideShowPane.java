@@ -335,7 +335,7 @@ public class SlideShowPane
         magX = magY = 0;
         magRadius = 0;
 
-        getImages();
+        computeOnScreenURLs();
 
         computeImages();
         computeImagePositions();
@@ -348,7 +348,7 @@ public class SlideShowPane
         if (u!=null) {
             System.out.println("smackdown "+u);
             urls.remove(u);
-            getImages();
+            computeOnScreenURLs();
             computeImages();
             computeImagePositions();
             repaint(100);
@@ -368,7 +368,7 @@ public class SlideShowPane
     }
     //////////////////////////////////////////////////////////////////////
 
-    protected synchronized void getImages() {
+    protected synchronized void computeOnScreenURLs() {
 
 //        PrintStream pw = System.err;
 //        pw.println("getImages()");
@@ -527,7 +527,7 @@ public class SlideShowPane
         currImageIdx = newIdx;
         System.out.println(getURL(newIdx).toString());
         if (delta != 0) {
-            getImages();
+            computeOnScreenURLs();
             computeImages();
             computeImagePositions();
             repaint();
@@ -540,7 +540,7 @@ public class SlideShowPane
     {
         images.resetBrokenImages(null);
 
-        getImages();
+        computeOnScreenURLs();
         computeImages();
     }
 
@@ -918,7 +918,7 @@ public class SlideShowPane
             if (0 != (mods & KeyEvent.SHIFT_MASK)) {
                 blacklistEnabled = !blacklistEnabled;
 
-                getImages();
+                computeOnScreenURLs();
                 computeImages();
                 computeImagePositions();
                 repaint(1);
